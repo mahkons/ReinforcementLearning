@@ -5,6 +5,7 @@ import random
 from collections import namedtuple
 from itertools import count
 import matplotlib.pyplot as plt
+import argparse
 
 import torch
 import torch.nn as nn
@@ -27,7 +28,16 @@ z_size = 32
 n_hidden = 256
 n_gaussians = 5
 
-epochs = 50
+epochs = 1
+render_env = False
+
+def create_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--epochs', type=int, default=1, required=False)
+    parser.add_argument('--show', type=lambda x: (str(x).lower() in ['true','1', 'yes']), default=False, required=False)
+    parser.add_argument('--restart', type=lambda x: (str(x).lower() in ['true','1', 'yes']), default=False, required=False)
+    return parser
+
 
 if __name__ == "__main__":
 
@@ -36,23 +46,30 @@ if __name__ == "__main__":
     device = torch.device("cpu")
     print("Device: {}".format(device))
 
+    args = create_parser().parse_args()
+    epochs, render_env = args.epochs, args.show
+    print(args.show)
+
     vae = VAE(image_channels=3)
-    vae.load_state_dict(torch.load('worldmodel/generated/vae.torch', map_location='cpu'))
+    vae.load_state_dict(torch.load('generated/vae.torch', map_location='cpu'))
     vae.to(device)
 
     mdnrnn = MDNRNN(z_size, n_hidden, n_gaussians)
-    mdnrnn.load_state_dict(torch.load('worldmodel/generated/mdnrnn.torch', map_location='cpu'))
+    mdnrnn.load_state_dict(torch.load('generated/mdnrnn.torch', map_location='cpu'))
     mdnrnn.to(device)
 
     controller = ControllerDQN(env, z_size, 3, device=device)
+    if not args.restart:
+        controller.load_model("generated/dqn.torch")
     agent = Agent(env, mdnrnn, vae, controller, device=device)
 
     plot_data = list()
     for episode in range(epochs):
-        reward = agent.rollout(show=True)
-        print("Episode {}. Reward: {}".format(episode, reward))
+        reward = agent.rollout(show=render_env)
+        print("Episode {}/{}. Reward: {}".format(episode, epochs, reward))
         plot_data.append(reward)
 
+    controller.save_model("generated/dqn.torch")
     plot = go.Figure()
     plot.add_trace(go.Scatter(x=np.arange(epochs), y=np.array(plot_data)))
     plot.show()

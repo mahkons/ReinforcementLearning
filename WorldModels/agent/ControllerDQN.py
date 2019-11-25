@@ -8,13 +8,13 @@ import torch.nn.functional as F
 
 from agent.ReplayBuffer import Transition
 
-HIDDEN_DQN = 320
+HIDDEN_DQN = 32
 DQN_N_ATOMS = 3
 BATCH_SIZE = 32
 GAMMA = 0.999
 EPS_START = 0.9
 EPS_END = 0.05
-EPS_DECAY = 1000
+EPS_DECAY = 200
 TARGET_UPDATE = 500
 DQN_LR = 1e-3
 
@@ -37,7 +37,7 @@ class ControllerDQN:
         self.env = env
         self.state_sz = state_sz
         self.action_sz = action_sz
-        self.device=device
+        self.device = device
 
         self.steps_done = 0
         self.net = DQN(state_sz, action_sz, DQN_N_ATOMS).to(device)
@@ -65,13 +65,17 @@ class ControllerDQN:
 
         batch = Transition(*zip(*transitions))
         
-        batch_state = torch.cat(batch.state).detach()
-        batch_action = torch.cat(batch.action).detach()
-        batch_reward = torch.cat(batch.reward).detach()
-        batch_next_state = torch.cat(batch.next_state).detach()
+        batch_state = torch.cat(batch.state)
+        batch_action = torch.cat(batch.action)
+        batch_reward = torch.cat(batch.reward)
+        batch_next_state = torch.cat(batch.next_state)
 
         state_action_values = self.net(batch_state).gather(1, batch_action)
-        next_values = self.target_net(batch_next_state).max(1)[0].detach()
+        
+        with torch.no_grad():
+            next_action = self.net(batch_next_state).max(1)[1].unsqueeze(1)
+            next_values = self.target_net(batch_next_state).gather(1, next_action).squeeze(1)
+        
         expected_state_action_values = (next_values * GAMMA) + batch_reward
 
         loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
@@ -79,3 +83,18 @@ class ControllerDQN:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+    def load_model(self, path):
+        self.net.to(torch.device('cpu'))
+        self.target_net.to(torch.device('cpu'))
+        self.net.load_state_dict(torch.load(path, map_location='cpu'))
+        self.target_net.load_state_dict(torch.load(path, map_location='cpu'))
+        self.net.to(self.device)
+        self.target_net.to(self.device)
+
+    def save_model(self, path):
+        self.net.to(torch.device('cpu'))
+        self.target_net.to(torch.device('cpu'))
+        torch.save(self.net.state_dict(), path)
+        self.net.to(self.device)
+        self.target_net.to(self.device)

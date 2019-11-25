@@ -38,7 +38,7 @@ class Agent:
             T.Resize(64),
             T.ToTensor(),
         ])
-        return transform(obs).to(self.device).unsqueeze(0).detach()
+        return transform(obs).to(self.device).unsqueeze(0)
 
 
     def transform_action(self, best_action):
@@ -48,7 +48,8 @@ class Agent:
 
     def rollout(self, show=False):
         obs = self.resize_obs(self.env.reset())
-        state, _, _ = self.vae.encode(obs)
+        with torch.no_grad():
+            state, _, _ = self.vae.encode(obs)
         h = self.rnn.init_hidden(self.z_size, self.device)
         done = False
         total_reward = 0
@@ -65,7 +66,8 @@ class Agent:
             action = torch.tensor([[action]], dtype=torch.long, device=self.device)
 
             obs = self.resize_obs(obs)
-            next_state, _, _ = self.vae.encode(obs)
+            with torch.no_grad():
+                next_state, _, _ = self.vae.encode(obs)
 
             #  _, next_h = self.rnn(next_state, h)
             self.memory.push(state, action, next_state, reward)
