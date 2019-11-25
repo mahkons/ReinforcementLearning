@@ -1,0 +1,13 @@
+# Python
+__pycache__
+
+# Vim
+*.swp
+*.swo
+
+# PyCharm
+.idea
+
+genereted
+test
+rollouts
