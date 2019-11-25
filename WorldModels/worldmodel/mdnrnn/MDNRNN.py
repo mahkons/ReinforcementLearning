@@ -44,7 +44,7 @@ class MDNRNN(nn.Module):
         pi, mu, sigma = self.get_mixture_coef(y)
         return (pi, mu, sigma), (h, c)
     
-    def init_hidden(self, bsz):
+    def init_hidden(self, bsz, device):
         return (torch.zeros(self.n_layers, bsz, self.n_hidden).to(device),
                 torch.zeros(self.n_layers, bsz, self.n_hidden).to(device))
 

@@ -55,14 +55,24 @@ class VAE(nn.Module):
     def reparameterize(self, mu, logvar):
         std = logvar.mul(0.5).exp_()
         # return torch.normal(mu, std)
-        esp = torch.randn(*mu.size())
+        esp = torch.randn(*mu.size()).to(std.device)
         z = mu + std * esp
         return z
-    
+
     def bottleneck(self, h):
         mu, logvar = self.fc1(h), self.fc2(h)
         z = self.reparameterize(mu, logvar)
         return z, mu, logvar
+
+    def encode(self, x):
+        h = self.encoder(x)
+        z, mu, logvar = self.bottleneck(h)
+        return z, mu, logvar
+
+    def decode(self, z):
+        z = self.fc3(z)
+        z = self.decoder(z)
+        return z
         
     def representation(self, x):
         return self.bottleneck(self.encoder(x))[0]
