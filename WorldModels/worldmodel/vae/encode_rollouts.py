@@ -1,9 +1,7 @@
 import plotly
 import numpy as np
 import math
-import gym
 import random
-import Box2D
 import matplotlib.pyplot as plt
 from IPython.core.display import Image, display
 
@@ -56,5 +54,4 @@ with torch.no_grad():
     x = np.random.randint(z.size(0))
     show(make_grid(vae.decode(z_l[x:x+16])))
     plt.show()
-
 

@@ -1,14 +1,6 @@
-import plotly
-import numpy as np
-import math
-import gym
-import Box2D
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms
-from torchvision import datasets
 
 class Flatten(nn.Module):
     def forward(self, input):
@@ -54,7 +46,6 @@ class VAE(nn.Module):
         
     def reparameterize(self, mu, logvar):
         std = logvar.mul(0.5).exp_()
-        # return torch.normal(mu, std)
         esp = torch.randn(*mu.size()).to(std.device)
         z = mu + std * esp
         return z
@@ -82,6 +73,7 @@ class VAE(nn.Module):
         z, mu, logvar = self.bottleneck(h)
         z = self.fc3(z)
         return self.decoder(z), mu, logvar
+
 
 def VAE_loss(recon_x, x, mu, logvar):
     BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
