@@ -40,12 +40,6 @@ class Agent:
         ])
         return transform(obs).to(self.device).unsqueeze(0)
 
-
-    def transform_action(self, best_action):
-        res = np.array([(best_action // (DQN_N_ATOMS ** i)) % DQN_N_ATOMS for i in range(self.action_sz)]) / (DQN_N_ATOMS - 1)
-        res[0] = res[0] * 2 - 1
-        return res
-
     def rollout(self, show=False):
         obs = self.resize_obs(self.env.reset())
         with torch.no_grad():
@@ -60,10 +54,10 @@ class Agent:
                 self.env.render()
 
             action = self.controller.select_action(state)
-            obs, reward, done, _ = self.env.step(self.transform_action(action))
+            obs, reward, done, _ = self.env.step(action)
             total_reward += reward
             reward = torch.tensor([reward], dtype=torch.float, device=self.device)
-            action = torch.tensor([[action]], dtype=torch.long, device=self.device)
+            action = torch.tensor([action], dtype=torch.float, device=self.device)
 
             obs = self.resize_obs(obs)
             with torch.no_grad():

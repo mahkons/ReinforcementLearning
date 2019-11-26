@@ -2,11 +2,29 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.transforms as T
+import torch.nn.functional as F
 
 HIDDEN_ACTOR_SIZE = 256
 HIDDEN_CRITIC_SIZE = 256
 ACTOR_LR = 1e-3
 CRITIC_LR = 1e-3
+GAMMA = 0.999
+TARGET_UPDATE = 500
+BATCH_SIZE = 64
+TAU = 0.001
+
+
+def load_net(net, path, device):
+    net.to(torch.device('cpu'))
+    net.load_state_dict(torch.load(path, map_location='cpu'))
+    net.to(device)
+
+
+def save_net(net, path, device):
+    net.to(torch.device('cpu'))
+    torch.save(net.state_dict(), path)
+    net.to(device)
+
 
 class Actor(nn.Module):
     def __init__(self, state_sz, action_sz):
@@ -38,21 +56,87 @@ class Critic(nn.Module):
         return x
 
 class ControllerAC:
-    def __init__(self, env, state_sz, action_sz):
+    def __init__(self, env, state_sz, action_sz, device):
         self.env = env
         self.state_sz = state_sz
         self.action_sz = action_sz
+        self.device = device
 
-        self.actor = Actor(state_sz, action_sz)
-        self.critic = Critic(state_sz, action_sz)
+        self.actor = Actor(state_sz, action_sz).to(device)
+        self.target_actor = Actor(state_sz, action_sz).to(device)
 
-        self.actor_optim = torch.optim.Adam(self.actor.parameters(), lr=ACTOR_LR)
-        self.critic_optim = torch.optim.Adam(self.critic.parameters(), lr=CRITIC_LR)
+        self.critic = Critic(state_sz, action_sz).to(device)
+        self.target_critic = Critic(state_sz, action_sz).to(device)
+
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=ACTOR_LR)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=CRITIC_LR)
 
         self.steps_done = 0
 
     def select_action(self, state):
-        return self.env.action_space.sample()
         with torch.no_grad():
-            return self.actor.forward(state)
+            return self.actor(state).to(torch.device('cpu')).numpy().squeeze(0)
 
+    def hard_update(self):
+        self.target_actor.load_state_dict(self.actor.state_dict())
+        self.target_critic.load_state_dict(self.critic.state_dict())
+
+    def soft_update_net(self, local_model, target_model):
+        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
+            target_param.data.copy_(TAU * local_param.data + (1.0 - TAU) * target_param.data)
+
+    def soft_update(self):
+        self.soft_update_net(self.actor, self.target_actor)
+        self.soft_update_net(self.critic, self.target_critic)
+
+    def optimize_critic(self):
+        if len(self.memory) < BATCH_SIZE:
+            return
+        state, action, reward, next_state = self.memory.sample(BATCH_SIZE)
+
+        state_action_values = self.critic(state, action)
+        with torch.no_grad():
+            noise = torch.empty(action.shape).data.normal_(0, 0.2).to(self.device)
+            noise = noise.clamp(-0.5, 0.5)
+
+            next_action = (self.target_actor(next_state) + noise).clamp(-1., 1.)
+            next_values = self.target_critic(next_state, next_action).squeeze(1)
+        
+        expected_state_action_values = (next_values * GAMMA) + reward
+
+        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+
+        self.critic_optimizer.zero_grad()
+        loss.backward()
+        self.critic_optimizer.step()
+
+
+    def optimize_actor(self):
+        if len(self.memory) < BATCH_SIZE:
+            return
+        state, action, reward, next_state = self.memory.sample(BATCH_SIZE)
+        predicted_action = self.actor(state)
+        
+        loss = -torch.sum(self.critic(state, predicted_action), dim=1).mean()
+        
+        self.actor_optimizer.zero_grad()
+        loss.backward()
+        self.actor_optimizer.step()
+
+
+    def optimize(self):
+        self.optimize_critic()
+        self.optimize_actor()
+        self.soft_update()
+
+    def load_model(self, path):
+        load_net(self.actor, path + '_actor', self.device)
+        load_net(self.target_actor, path + '_target_actor', self.device)
+        load_net(self.critic, path + '_critic', self.device)
+        load_net(self.target_critic, path + '_target_critic', self.device)
+
+    def save_model(self, path):
+        save_net(self.actor, path + '_actor', self.device)
+        save_net(self.target_actor, path + '_target_actor', self.device)
+        save_net(self.critic, path + '_critic', self.device)
+        save_net(self.target_critic, path + '_target_critic', self.device)

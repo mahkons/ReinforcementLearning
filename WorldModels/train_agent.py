@@ -24,7 +24,10 @@ from agent.ControllerDQN import ControllerDQN
 import plotly as plt
 import plotly.graph_objects as go
 
-z_size = 32
+
+
+state_sz = 32
+action_sz = 3
 n_hidden = 256
 n_gaussians = 5
 
@@ -44,21 +47,22 @@ if __name__ == "__main__":
     env = gym.make('CarRacing-v0')
     #  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device("cpu")
-    print("Device: {}".format(device))
-
     args = create_parser().parse_args()
+
+    print("Device: {}".format(device))
+    print("Show: {}. Restart {}".format(args.show, args.restart))
+
     epochs, render_env = args.epochs, args.show
-    print(args.show)
 
     vae = VAE(image_channels=3)
     vae.load_state_dict(torch.load('generated/vae.torch', map_location='cpu'))
     vae.to(device)
 
-    mdnrnn = MDNRNN(z_size, n_hidden, n_gaussians)
+    mdnrnn = MDNRNN(state_sz, n_hidden, n_gaussians)
     mdnrnn.load_state_dict(torch.load('generated/mdnrnn.torch', map_location='cpu'))
     mdnrnn.to(device)
 
-    controller = ControllerDQN(env, z_size, 3, device=device)
+    controller = ControllerAC(env, state_sz, action_sz, device=device)
     if not args.restart:
         controller.load_model("generated/dqn.torch")
     agent = Agent(env, mdnrnn, vae, controller, device=device)

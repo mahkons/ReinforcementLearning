@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from agent.ReplayBuffer import Transition
 
-HIDDEN_DQN = 32
+HIDDEN_DQN = 320
 DQN_N_ATOMS = 3
 BATCH_SIZE = 32
 GAMMA = 0.999
@@ -61,7 +61,7 @@ class ControllerDQN:
 
         if len(self.memory) < BATCH_SIZE:
             return
-        transitions = self.memory.sample(BATCH_SIZE)
+        transitions = self.memory.sample_transitions(BATCH_SIZE)
 
         batch = Transition(*zip(*transitions))
         
