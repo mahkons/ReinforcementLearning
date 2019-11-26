@@ -42,14 +42,15 @@ class Agent:
 
     def rollout(self, show=False):
         obs = self.resize_obs(self.env.reset())
+        hidden = self.rnn.init_hidden(1, self.device)
         with torch.no_grad():
             state, _, _ = self.vae.encode(obs)
-        h = self.rnn.init_hidden(self.z_size, self.device)
+            state = torch.cat([state, hidden[0].squeeze(1)], dim=1)
         done = False
         total_reward = 0
 
         for t in count():
-            h = detach(h)
+            hidden = detach(hidden)
             if show:
                 self.env.render()
 
@@ -62,10 +63,11 @@ class Agent:
             obs = self.resize_obs(obs)
             with torch.no_grad():
                 next_state, _, _ = self.vae.encode(obs)
+                _, next_hidden = self.rnn(next_state.unsqueeze(0), hidden)
+                next_state = torch.cat([next_state, next_hidden[0].squeeze(1)], dim=1)
 
-            #  _, next_h = self.rnn(next_state, h)
             self.memory.push(state, action, next_state, reward)
-            state = next_state
+            state, hidden = next_state, next_hidden
             self.controller.optimize()
 
             if done:

@@ -28,7 +28,7 @@ import plotly.graph_objects as go
 
 state_sz = 32
 action_sz = 3
-n_hidden = 256
+hidden_sz = 256
 n_gaussians = 5
 
 epochs = 1
@@ -58,11 +58,11 @@ if __name__ == "__main__":
     vae.load_state_dict(torch.load('generated/vae.torch', map_location='cpu'))
     vae.to(device)
 
-    mdnrnn = MDNRNN(state_sz, n_hidden, n_gaussians)
+    mdnrnn = MDNRNN(state_sz, hidden_sz, n_gaussians)
     mdnrnn.load_state_dict(torch.load('generated/mdnrnn.torch', map_location='cpu'))
     mdnrnn.to(device)
 
-    controller = ControllerAC(env, state_sz, action_sz, device=device)
+    controller = ControllerAC(env, state_sz, action_sz, hidden_sz, device=device)
     if not args.restart:
         controller.load_model("generated/dqn.torch")
     agent = Agent(env, mdnrnn, vae, controller, device=device)

@@ -6,10 +6,9 @@ import torch.nn.functional as F
 
 HIDDEN_ACTOR_SIZE = 256
 HIDDEN_CRITIC_SIZE = 256
-ACTOR_LR = 1e-3
-CRITIC_LR = 1e-3
+ACTOR_LR = 1e-4
+CRITIC_LR = 1e-4
 GAMMA = 0.999
-TARGET_UPDATE = 500
 BATCH_SIZE = 64
 TAU = 0.001
 
@@ -27,13 +26,15 @@ def save_net(net, path, device):
 
 
 class Actor(nn.Module):
-    def __init__(self, state_sz, action_sz):
+    def __init__(self, state_sz, action_sz, hidden_sz, device):
         super(Actor, self).__init__()              
-        self.fc1 = nn.Linear(state_sz, HIDDEN_ACTOR_SIZE)
+        self.fc1 = nn.Linear(state_sz + hidden_sz, HIDDEN_ACTOR_SIZE)
         self.fc2 = nn.Linear(HIDDEN_ACTOR_SIZE, action_sz)
 
         nn.init.xavier_uniform_(self.fc1.weight)
         nn.init.xavier_uniform_(self.fc2.weight)
+
+        self.device = device
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -42,9 +43,9 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    def __init__(self, state_sz, action_sz):
+    def __init__(self, state_sz, action_sz, hidden_sz):
         super(Critic, self).__init__()              
-        self.fc1 = nn.Linear(state_sz + action_sz, HIDDEN_CRITIC_SIZE)
+        self.fc1 = nn.Linear(state_sz + action_sz + hidden_sz, HIDDEN_CRITIC_SIZE)
         self.fc2 = nn.Linear(HIDDEN_CRITIC_SIZE, 1)
 
         nn.init.xavier_uniform_(self.fc1.weight)
@@ -56,17 +57,18 @@ class Critic(nn.Module):
         return x
 
 class ControllerAC:
-    def __init__(self, env, state_sz, action_sz, device):
+    def __init__(self, env, state_sz, action_sz, hidden_sz, device):
         self.env = env
         self.state_sz = state_sz
         self.action_sz = action_sz
+        self.hidden_sz = hidden_sz
         self.device = device
 
-        self.actor = Actor(state_sz, action_sz).to(device)
-        self.target_actor = Actor(state_sz, action_sz).to(device)
+        self.actor = Actor(state_sz, action_sz, hidden_sz, device).to(device)
+        self.target_actor = Actor(state_sz, action_sz, hidden_sz, device).to(device)
 
-        self.critic = Critic(state_sz, action_sz).to(device)
-        self.target_critic = Critic(state_sz, action_sz).to(device)
+        self.critic = Critic(state_sz, action_sz, hidden_sz).to(device)
+        self.target_critic = Critic(state_sz, action_sz, hidden_sz).to(device)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=ACTOR_LR)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=CRITIC_LR)
